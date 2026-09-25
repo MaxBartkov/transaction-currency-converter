@@ -1,0 +1,46 @@
+name: Build and test
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Controller integration tests (local)
+        run: bash ./mvnw -B -ntp verify
+      - name: Build and start application image
+        run: docker compose --project-name currency-converter-ci up --build --wait --wait-timeout 120
+      - name: Verify packaged application and persistence across restart
+        shell: pwsh
+        run: |
+          $id = ./scripts/smoke-test.ps1
+          docker compose --project-name currency-converter-ci restart app
+          if ($LASTEXITCODE -ne 0) { throw 'Application restart failed' }
+          docker compose --project-name currency-converter-ci up --wait --wait-timeout 120
+          if ($LASTEXITCODE -ne 0) { throw 'Application did not become ready after restart' }
+          ./scripts/smoke-test.ps1 -TransactionId $id
+      - name: Collect application logs
+        if: always()
+        run: docker compose --project-name currency-converter-ci logs --no-color > target/compose.log
+      - name: Stop test environment
+        if: always()
+        run: docker compose --project-name currency-converter-ci down --volumes
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            target/surefire-reports/
+            target/compose.log

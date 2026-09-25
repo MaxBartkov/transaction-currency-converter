@@ -1,0 +1,40 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-create-transactions
+      author: converter
+      changes:
+        - createTable:
+            tableName: transactions
+            columns:
+              - column:
+                  name: id
+                  type: uuid
+                  constraints:
+                    primaryKey: true
+                    primaryKeyName: transactions_pkey
+                    nullable: false
+              - column:
+                  name: description
+                  type: varchar(50)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: transaction_date
+                  type: date
+                  constraints:
+                    nullable: false
+              - column:
+                  name: amount_usd
+                  type: numeric(19,2)
+                  constraints:
+                    nullable: false
+        # PostgreSQL CHECK constraints without the commercial addCheckConstraint extension.
+        - sql:
+            dbms: postgresql
+            sql: >-
+              ALTER TABLE transactions
+              ADD CONSTRAINT transactions_description_not_blank CHECK (length(btrim(description)) > 0),
+              ADD CONSTRAINT transactions_amount_positive CHECK (amount_usd > 0);
+      rollback:
+        - dropTable:
+            tableName: transactions

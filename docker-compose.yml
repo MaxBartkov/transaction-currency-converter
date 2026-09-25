@@ -1,0 +1,53 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-transactions}
+      POSTGRES_USER: ${DB_USER:-transactions}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-transactions}
+    ports:
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  app:
+    build:
+      context: .
+      target: runtime
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      DB_URL: jdbc:postgresql://postgres:5432/${DB_NAME:-transactions}
+      DB_USER: ${DB_USER:-transactions}
+      DB_PASSWORD: ${DB_PASSWORD:-transactions}
+      TREASURY_BASE_URL: ${TREASURY_BASE_URL:-https://api.fiscaldata.treasury.gov/services/api/fiscal_service}
+      TREASURY_CONNECT_TIMEOUT: ${TREASURY_CONNECT_TIMEOUT:-2s}
+      TREASURY_READ_TIMEOUT: ${TREASURY_READ_TIMEOUT:-5s}
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    stop_grace_period: 40s
+    restart: unless-stopped
+
+  tests:
+    profiles: [test]
+    build:
+      context: .
+      target: test
+    environment:
+      DOCKER_HOST: unix:///var/run/docker.sock
+      TESTCONTAINERS_HOST_OVERRIDE: host.docker.internal
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  postgres-data:

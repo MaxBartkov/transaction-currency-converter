@@ -1,0 +1,777 @@
+openapi: 3.0.3
+info:
+  title: Transaction Currency Converter
+  version: 1.0.0
+  description: Persist USD transactions and convert them using historical U.S. Treasury exchange rates.
+servers:
+  - url: /
+paths:
+  /api/v1/transactions:
+    post:
+      operationId: createTransaction
+      summary: Store a transaction in USD
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTransactionRequest'
+            example:
+              description: Business lunch
+              transactionDate: '2024-06-30'
+              amountUsd: 10.005
+      responses:
+        '201':
+          description: Transaction stored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/transactions/{id}:
+    parameters:
+      - $ref: '#/components/parameters/TransactionId'
+    get:
+      operationId: getTransaction
+      summary: Retrieve the original USD transaction
+      responses:
+        '200':
+          description: Stored transaction
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaction'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /api/v1/transactions/{id}/conversion:
+    parameters:
+      - $ref: '#/components/parameters/TransactionId'
+    get:
+      operationId: convertTransaction
+      summary: Convert using the latest eligible rate within six calendar months
+      description: >-
+        Uses the latest record_date in the inclusive interval [transactionDate minus six months, transactionDate].
+        Only amendments with effective_date on or before the transaction date are eligible.
+        Multiplies the stored USD amount by the rate and rounds to two decimal places using HALF_UP.
+      parameters:
+        - in: query
+          name: currency
+          required: true
+          description: Currency enum constant or exact Treasury country_currency_desc; ISO codes are not accepted.
+          schema:
+            oneOf:
+              - $ref: '#/components/schemas/CurrencyCode'
+              - $ref: '#/components/schemas/Currency'
+          example: CANADA_DOLLAR
+      responses:
+        '200':
+          description: Transaction with conversion details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConvertedTransaction'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          description: No eligible exchange rate; transaction cannot be converted to the target currency
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+              example:
+                type: about:blank
+                title: Unprocessable Entity
+                status: 422
+                detail: 'Transaction cannot be converted to Austria-Schilling: no exchange rate between 2023-12-30 and 2024-06-30 (inclusive)'
+                code: EXCHANGE_RATE_NOT_FOUND
+                instance: /api/v1/transactions/6b494e4a-9d3d-4af5-8f70-c114cbfabf64/conversion
+        '502':
+          description: Treasury returned an invalid response
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '503':
+          description: Treasury is unavailable, timed out, or returned 429 or 5xx
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '500':
+          $ref: '#/components/responses/InternalError'
+components:
+  parameters:
+    TransactionId:
+      in: path
+      name: id
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    Currency:
+      type: string
+      description: Treasury country-currency name serialized in conversion responses.
+      example: Canada-Dollar
+      enum:
+        - 'Afghanistan-Afghani'
+        - 'Albania-Lek'
+        - 'Algeria-Dinar'
+        - 'Angola-Kwanza'
+        - 'Antigua & Barbuda-East Caribbean Dollar'
+        - 'Argentina-Peso'
+        - 'Armenia-Dram'
+        - 'Australia-Dollar'
+        - 'Austria-Euro'
+        - 'Austria-Schilling'
+        - 'Azerbaijan-Manat'
+        - 'Azerbaijan-New Manat'
+        - 'Azerbaijan-Second Manat'
+        - 'Bahamas-Dollar'
+        - 'Bahrain-Dinar'
+        - 'Bangladesh-Taka'
+        - 'Barbados-Dollar'
+        - 'Belarus-New Ruble'
+        - 'Belarus-Ruble'
+        - 'Belgium-Euro'
+        - 'Belgium-Francs'
+        - 'Belize-Dollar'
+        - 'Benin-Cfa Franc'
+        - 'Bermuda-Dollar'
+        - 'Bolivia-Boliviano'
+        - 'Bosnia Hercegovina-Marka'
+        - 'Bosnia-Marka'
+        - 'Botswana-Pula'
+        - 'Brazil-Real'
+        - 'Brunei-Dollar'
+        - 'Bulgaria-Lev'
+        - 'Bulgaria-Lev New'
+        - 'Burkina Faso-Cfa Franc'
+        - 'Burma Myanmar-Kyat'
+        - 'Burma-Kyat'
+        - 'Burundi-Franc'
+        - 'Cambodia (Khmer)-Riel'
+        - 'Cambodia-Riel'
+        - 'Cameroon-Cfa Franc'
+        - 'Canada-Dollar'
+        - 'Cape Verde-Escudo'
+        - 'Cayman Islands-Dollar'
+        - 'Central African Republic-Cfa Franc'
+        - 'Chad-Cfa Franc'
+        - 'Chile-Peso'
+        - 'China-Renminbi'
+        - 'Colombia-Peso'
+        - 'Comoros-Franc'
+        - 'Congo-Cfa Franc'
+        - 'Costa Rica-Colon'
+        - 'Cote D''Ivoire-Cfa Franc'
+        - 'Croatia-Euro'
+        - 'Croatia-Kuna'
+        - 'Cross Border-Euro'
+        - 'Cuba-Chavito'
+        - 'Cuba-Peso'
+        - 'Curacao-Caribbean Guilder'
+        - 'Cyprus-Euro'
+        - 'Cyprus-Pound'
+        - 'Czech Republic-Koruna'
+        - 'Democratic Republic Of Congo-Congolese Franc'
+        - 'Democratic Republic Of Congo-Franc'
+        - 'Denmark-Krone'
+        - 'Djibouti-Franc'
+        - 'Dominican Republic-Peso'
+        - 'Ecuador-Dolares'
+        - 'Ecuador-Sucre'
+        - 'Egypt-Pound'
+        - 'El Salvador-Colon'
+        - 'El Salvador-Dolares'
+        - 'El Salvador-Dollar'
+        - 'Equatorial Guinea-Cfa Franc'
+        - 'Eritrea-Nakfa'
+        - 'Eritrea-Nakfa Salary Payment'
+        - 'Estonia-Euro'
+        - 'Estonia-Kroon'
+        - 'Eswatini-Lilangeni'
+        - 'Ethiopia-Birr'
+        - 'Euro Zone-Euro'
+        - 'Fiji-Dollar'
+        - 'Finland-Euro'
+        - 'Finland-Markka'
+        - 'France-Euro'
+        - 'France-Franc'
+        - 'Gabon-Cfa Franc'
+        - 'Gambia-Dalasi'
+        - 'Georgia-Lari'
+        - 'Germany Frg-Euro'
+        - 'Germany-Euro'
+        - 'Germany-Mark'
+        - 'Ghana-Cedi'
+        - 'Ghana-Second Cedi'
+        - 'Greece-Drachma'
+        - 'Greece-Euro'
+        - 'Grenada-East Caribbean Dollar'
+        - 'Guatemala-Quetzal'
+        - 'Guinea Bissau-Cfa Franc'
+        - 'Guinea-Franc'
+        - 'Guyana-Dollar'
+        - 'Haiti-Gourde'
+        - 'Honduras-Lempira'
+        - 'Hong Kong-Dollar'
+        - 'Hungary-Forint'
+        - 'Iceland-Krona'
+        - 'India-Rupee'
+        - 'Indonesia-Rupiah'
+        - 'Iran-Rial'
+        - 'Iraq-Dinar'
+        - 'Ireland-Euro'
+        - 'Ireland-Pound'
+        - 'Israel-Shekel'
+        - 'Italy-Euro'
+        - 'Italy-Lira'
+        - 'Jamaica-Dollar'
+        - 'Japan-Yen'
+        - 'Jerusalem-Shekel'
+        - 'Jordan-Dinar'
+        - 'Kazakhstan-Tenge'
+        - 'Kenya-Shilling'
+        - 'Korea-Won'
+        - 'Kosovo-Euro'
+        - 'Kuwait-Dinar'
+        - 'Kyrgyzstan-Som'
+        - 'Laos-Kip'
+        - 'Latvia-Euro'
+        - 'Latvia-Lats'
+        - 'Lebanon-Pound'
+        - 'Lesotho-Maloti'
+        - 'Lesotho-South African Rand'
+        - 'Liberia-Dollar'
+        - 'Liberia-U.S. Dollar'
+        - 'Libya-Dinar'
+        - 'Lithuania-Euro'
+        - 'Lithuania-Lita'
+        - 'Lithuania-Litas'
+        - 'Luxembourg-Euro'
+        - 'Luxembourg-Franc'
+        - 'Macao-Mop'
+        - 'Macedonia Fyrom-Aria'
+        - 'Macedonia Fyrom-Denar'
+        - 'Macedonia Fyrom-Denar (Ariary)'
+        - 'Madagascar-Ariary'
+        - 'Madagascar-Franc'
+        - 'Malawi-Kwacha'
+        - 'Malaysia-Ringgit'
+        - 'Maldives-Rufiyaa'
+        - 'Mali-Cfa Franc'
+        - 'Malta-Euro'
+        - 'Maltese-Lira'
+        - 'Marshall Islands-Dollar'
+        - 'Marshall Islands-U.S. Dollar'
+        - 'Martinique-Euro'
+        - 'Martinique-French Francs'
+        - 'Mauritania-First Ouguiya'
+        - 'Mauritania-Ouguiya'
+        - 'Mauritius-Rupee'
+        - 'Mexico-New Peso'
+        - 'Mexico-Peso'
+        - 'Micronesia-Dollar'
+        - 'Micronesia-U.S. Dollar'
+        - 'Moldova-Leu'
+        - 'Mongolia-Tugrik'
+        - 'Montenegro-Euro'
+        - 'Morocco-Dirham'
+        - 'Mozambique-Meticais'
+        - 'Mozambique-Metical'
+        - 'Myanmar-Kyat'
+        - 'Namibia-Dollar'
+        - 'Nepal-Rupee'
+        - 'Netherlands Antilles-Guilder'
+        - 'Netherlands-Euro'
+        - 'Netherlands-Guilder'
+        - 'New Zealand-Dollar'
+        - 'Nicaragua-Cordoba'
+        - 'Niger-Cfa Franc'
+        - 'Nigeria-Naira'
+        - 'Norway-Krone'
+        - 'Oman-Rial'
+        - 'Pakistan-Rupee'
+        - 'Palau-Dollar'
+        - 'Panama-Balboa'
+        - 'Panama-Dolares'
+        - 'Papua New Guinea-Kina'
+        - 'Paraguay-Guarani'
+        - 'Peru-Nuevo Sol'
+        - 'Peru-Sol'
+        - 'Philippines-Peso'
+        - 'Poland-Zloty'
+        - 'Portugal-Escudo'
+        - 'Portugal-Euro'
+        - 'Qatar-Riyal'
+        - 'Republic Of North Macedonia-Denar'
+        - 'Republic Of Palau-Dollar'
+        - 'Romania-Leu'
+        - 'Romania-New Leu'
+        - 'Romania-Third Leu'
+        - 'Russia-Ruble'
+        - 'Rwanda-Franc'
+        - 'Sao Tome & Principe-Dobras'
+        - 'Sao Tome & Principe-New Dobras'
+        - 'Saudi Arabia-Riyal'
+        - 'Senegal-Cfa Franc'
+        - 'Serbia-Dinar'
+        - 'Serbia-Euro Dinar'
+        - 'Seychelles-Rupee'
+        - 'Sierra Leone-Leone'
+        - 'Sierra Leone-Old Leone'
+        - 'Singapore-Dollar'
+        - 'Slovak Republic-Euro'
+        - 'Slovak-Korun'
+        - 'Slovakia-Euro'
+        - 'Slovenia-Euro'
+        - 'Slovenia-Tolars'
+        - 'Solomon Islands-Dollar'
+        - 'Somali-Shilling'
+        - 'South Africa-Rand'
+        - 'South Sudan-Sudanese Pound'
+        - 'Spain-Euro'
+        - 'Spain-Peseta'
+        - 'Sri Lanka-Rupee'
+        - 'St. Lucia-East Caribbean Dollar'
+        - 'Sudan-Dinar'
+        - 'Sudan-Pound'
+        - 'Sudan-Sudanese Pound'
+        - 'Suriname-Dollar'
+        - 'Suriname-Guilder'
+        - 'Swaziland-Lilangeni'
+        - 'Sweden-Krona'
+        - 'Switzerland-Franc'
+        - 'Syria-Pound'
+        - 'Taiwan-Dollar'
+        - 'Tajikistan-Somoni'
+        - 'Tanzania-Shilling'
+        - 'Thailand-Baht'
+        - 'Timor-Leste Dili'
+        - 'Timor-Leste-Dili'
+        - 'Togo-Cfa Franc'
+        - 'Tonga-Pa''Anga'
+        - 'Trinidad & Tobago-Dollar'
+        - 'Tunisia-Dinar'
+        - 'Turkey-Lira'
+        - 'Turkey-New Lira'
+        - 'Turkmenistan-Manat'
+        - 'Turkmenistan-New Manat'
+        - 'Uganda-Shilling'
+        - 'Ukraine-Hryvnia'
+        - 'United Arab Emirates-Dirham'
+        - 'United Kingdom-Pound'
+        - 'United Kingdom-Pound Sterling'
+        - 'Uruguay-Peso'
+        - 'Uzbekistan-Som'
+        - 'Vanuatu-Vatu'
+        - 'Venezuela-Bolivar'
+        - 'Venezuela-Bolivar Fuerte'
+        - 'Venezuela-Bolivar Soberano'
+        - 'Venezuela-Fuerte'
+        - 'Venezuela-Soberano'
+        - 'Vietnam-Dong'
+        - 'Western Samoa-Tala'
+        - 'Yemen-Rial'
+        - 'Zambia-Kwacha'
+        - 'Zambia-New Kwacha'
+        - 'Zimbabwe-Dollar'
+        - 'Zimbabwe-Gold'
+        - 'Zimbabwe-Rtgs'
+    CurrencyCode:
+      type: string
+      description: Currency enum constant accepted as a query parameter.
+      example: CANADA_DOLLAR
+      enum:
+        - AFGHANISTAN_AFGHANI
+        - ALBANIA_LEK
+        - ALGERIA_DINAR
+        - ANGOLA_KWANZA
+        - ANTIGUA_BARBUDA_EAST_CARIBBEAN_DOLLAR
+        - ARGENTINA_PESO
+        - ARMENIA_DRAM
+        - AUSTRALIA_DOLLAR
+        - AUSTRIA_EURO
+        - AUSTRIA_SCHILLING
+        - AZERBAIJAN_MANAT
+        - AZERBAIJAN_NEW_MANAT
+        - AZERBAIJAN_SECOND_MANAT
+        - BAHAMAS_DOLLAR
+        - BAHRAIN_DINAR
+        - BANGLADESH_TAKA
+        - BARBADOS_DOLLAR
+        - BELARUS_NEW_RUBLE
+        - BELARUS_RUBLE
+        - BELGIUM_EURO
+        - BELGIUM_FRANCS
+        - BELIZE_DOLLAR
+        - BENIN_CFA_FRANC
+        - BERMUDA_DOLLAR
+        - BOLIVIA_BOLIVIANO
+        - BOSNIA_HERCEGOVINA_MARKA
+        - BOSNIA_MARKA
+        - BOTSWANA_PULA
+        - BRAZIL_REAL
+        - BRUNEI_DOLLAR
+        - BULGARIA_LEV
+        - BULGARIA_LEV_NEW
+        - BURKINA_FASO_CFA_FRANC
+        - BURMA_MYANMAR_KYAT
+        - BURMA_KYAT
+        - BURUNDI_FRANC
+        - CAMBODIA_KHMER_RIEL
+        - CAMBODIA_RIEL
+        - CAMEROON_CFA_FRANC
+        - CANADA_DOLLAR
+        - CAPE_VERDE_ESCUDO
+        - CAYMAN_ISLANDS_DOLLAR
+        - CENTRAL_AFRICAN_REPUBLIC_CFA_FRANC
+        - CHAD_CFA_FRANC
+        - CHILE_PESO
+        - CHINA_RENMINBI
+        - COLOMBIA_PESO
+        - COMOROS_FRANC
+        - CONGO_CFA_FRANC
+        - COSTA_RICA_COLON
+        - COTE_D_IVOIRE_CFA_FRANC
+        - CROATIA_EURO
+        - CROATIA_KUNA
+        - CROSS_BORDER_EURO
+        - CUBA_CHAVITO
+        - CUBA_PESO
+        - CURACAO_CARIBBEAN_GUILDER
+        - CYPRUS_EURO
+        - CYPRUS_POUND
+        - CZECH_REPUBLIC_KORUNA
+        - DEMOCRATIC_REPUBLIC_OF_CONGO_CONGOLESE_FRANC
+        - DEMOCRATIC_REPUBLIC_OF_CONGO_FRANC
+        - DENMARK_KRONE
+        - DJIBOUTI_FRANC
+        - DOMINICAN_REPUBLIC_PESO
+        - ECUADOR_DOLARES
+        - ECUADOR_SUCRE
+        - EGYPT_POUND
+        - EL_SALVADOR_COLON
+        - EL_SALVADOR_DOLARES
+        - EL_SALVADOR_DOLLAR
+        - EQUATORIAL_GUINEA_CFA_FRANC
+        - ERITREA_NAKFA
+        - ERITREA_NAKFA_SALARY_PAYMENT
+        - ESTONIA_EURO
+        - ESTONIA_KROON
+        - ESWATINI_LILANGENI
+        - ETHIOPIA_BIRR
+        - EURO_ZONE_EURO
+        - FIJI_DOLLAR
+        - FINLAND_EURO
+        - FINLAND_MARKKA
+        - FRANCE_EURO
+        - FRANCE_FRANC
+        - GABON_CFA_FRANC
+        - GAMBIA_DALASI
+        - GEORGIA_LARI
+        - GERMANY_FRG_EURO
+        - GERMANY_EURO
+        - GERMANY_MARK
+        - GHANA_CEDI
+        - GHANA_SECOND_CEDI
+        - GREECE_DRACHMA
+        - GREECE_EURO
+        - GRENADA_EAST_CARIBBEAN_DOLLAR
+        - GUATEMALA_QUETZAL
+        - GUINEA_BISSAU_CFA_FRANC
+        - GUINEA_FRANC
+        - GUYANA_DOLLAR
+        - HAITI_GOURDE
+        - HONDURAS_LEMPIRA
+        - HONG_KONG_DOLLAR
+        - HUNGARY_FORINT
+        - ICELAND_KRONA
+        - INDIA_RUPEE
+        - INDONESIA_RUPIAH
+        - IRAN_RIAL
+        - IRAQ_DINAR
+        - IRELAND_EURO
+        - IRELAND_POUND
+        - ISRAEL_SHEKEL
+        - ITALY_EURO
+        - ITALY_LIRA
+        - JAMAICA_DOLLAR
+        - JAPAN_YEN
+        - JERUSALEM_SHEKEL
+        - JORDAN_DINAR
+        - KAZAKHSTAN_TENGE
+        - KENYA_SHILLING
+        - KOREA_WON
+        - KOSOVO_EURO
+        - KUWAIT_DINAR
+        - KYRGYZSTAN_SOM
+        - LAOS_KIP
+        - LATVIA_EURO
+        - LATVIA_LATS
+        - LEBANON_POUND
+        - LESOTHO_MALOTI
+        - LESOTHO_SOUTH_AFRICAN_RAND
+        - LIBERIA_DOLLAR
+        - LIBERIA_U_S_DOLLAR
+        - LIBYA_DINAR
+        - LITHUANIA_EURO
+        - LITHUANIA_LITA
+        - LITHUANIA_LITAS
+        - LUXEMBOURG_EURO
+        - LUXEMBOURG_FRANC
+        - MACAO_MOP
+        - MACEDONIA_FYROM_ARIA
+        - MACEDONIA_FYROM_DENAR
+        - MACEDONIA_FYROM_DENAR_ARIARY_
+        - MADAGASCAR_ARIARY
+        - MADAGASCAR_FRANC
+        - MALAWI_KWACHA
+        - MALAYSIA_RINGGIT
+        - MALDIVES_RUFIYAA
+        - MALI_CFA_FRANC
+        - MALTA_EURO
+        - MALTESE_LIRA
+        - MARSHALL_ISLANDS_DOLLAR
+        - MARSHALL_ISLANDS_U_S_DOLLAR
+        - MARTINIQUE_EURO
+        - MARTINIQUE_FRENCH_FRANCS
+        - MAURITANIA_FIRST_OUGUIYA
+        - MAURITANIA_OUGUIYA
+        - MAURITIUS_RUPEE
+        - MEXICO_NEW_PESO
+        - MEXICO_PESO
+        - MICRONESIA_DOLLAR
+        - MICRONESIA_U_S_DOLLAR
+        - MOLDOVA_LEU
+        - MONGOLIA_TUGRIK
+        - MONTENEGRO_EURO
+        - MOROCCO_DIRHAM
+        - MOZAMBIQUE_METICAIS
+        - MOZAMBIQUE_METICAL
+        - MYANMAR_KYAT
+        - NAMIBIA_DOLLAR
+        - NEPAL_RUPEE
+        - NETHERLANDS_ANTILLES_GUILDER
+        - NETHERLANDS_EURO
+        - NETHERLANDS_GUILDER
+        - NEW_ZEALAND_DOLLAR
+        - NICARAGUA_CORDOBA
+        - NIGER_CFA_FRANC
+        - NIGERIA_NAIRA
+        - NORWAY_KRONE
+        - OMAN_RIAL
+        - PAKISTAN_RUPEE
+        - PALAU_DOLLAR
+        - PANAMA_BALBOA
+        - PANAMA_DOLARES
+        - PAPUA_NEW_GUINEA_KINA
+        - PARAGUAY_GUARANI
+        - PERU_NUEVO_SOL
+        - PERU_SOL
+        - PHILIPPINES_PESO
+        - POLAND_ZLOTY
+        - PORTUGAL_ESCUDO
+        - PORTUGAL_EURO
+        - QATAR_RIYAL
+        - REPUBLIC_OF_NORTH_MACEDONIA_DENAR
+        - REPUBLIC_OF_PALAU_DOLLAR
+        - ROMANIA_LEU
+        - ROMANIA_NEW_LEU
+        - ROMANIA_THIRD_LEU
+        - RUSSIA_RUBLE
+        - RWANDA_FRANC
+        - SAO_TOME_PRINCIPE_DOBRAS
+        - SAO_TOME_PRINCIPE_NEW_DOBRAS
+        - SAUDI_ARABIA_RIYAL
+        - SENEGAL_CFA_FRANC
+        - SERBIA_DINAR
+        - SERBIA_EURO_DINAR
+        - SEYCHELLES_RUPEE
+        - SIERRA_LEONE_LEONE
+        - SIERRA_LEONE_OLD_LEONE
+        - SINGAPORE_DOLLAR
+        - SLOVAK_REPUBLIC_EURO
+        - SLOVAK_KORUN
+        - SLOVAKIA_EURO
+        - SLOVENIA_EURO
+        - SLOVENIA_TOLARS
+        - SOLOMON_ISLANDS_DOLLAR
+        - SOMALI_SHILLING
+        - SOUTH_AFRICA_RAND
+        - SOUTH_SUDAN_SUDANESE_POUND
+        - SPAIN_EURO
+        - SPAIN_PESETA
+        - SRI_LANKA_RUPEE
+        - ST_LUCIA_EAST_CARIBBEAN_DOLLAR
+        - SUDAN_DINAR
+        - SUDAN_POUND
+        - SUDAN_SUDANESE_POUND
+        - SURINAME_DOLLAR
+        - SURINAME_GUILDER
+        - SWAZILAND_LILANGENI
+        - SWEDEN_KRONA
+        - SWITZERLAND_FRANC
+        - SYRIA_POUND
+        - TAIWAN_DOLLAR
+        - TAJIKISTAN_SOMONI
+        - TANZANIA_SHILLING
+        - THAILAND_BAHT
+        - TIMOR_LESTE_DILI_ALTERNATE
+        - TIMOR_LESTE_DILI
+        - TOGO_CFA_FRANC
+        - TONGA_PA_ANGA
+        - TRINIDAD_TOBAGO_DOLLAR
+        - TUNISIA_DINAR
+        - TURKEY_LIRA
+        - TURKEY_NEW_LIRA
+        - TURKMENISTAN_MANAT
+        - TURKMENISTAN_NEW_MANAT
+        - UGANDA_SHILLING
+        - UKRAINE_HRYVNIA
+        - UNITED_ARAB_EMIRATES_DIRHAM
+        - UNITED_KINGDOM_POUND
+        - UNITED_KINGDOM_POUND_STERLING
+        - URUGUAY_PESO
+        - UZBEKISTAN_SOM
+        - VANUATU_VATU
+        - VENEZUELA_BOLIVAR
+        - VENEZUELA_BOLIVAR_FUERTE
+        - VENEZUELA_BOLIVAR_SOBERANO
+        - VENEZUELA_FUERTE
+        - VENEZUELA_SOBERANO
+        - VIETNAM_DONG
+        - WESTERN_SAMOA_TALA
+        - YEMEN_RIAL
+        - ZAMBIA_KWACHA
+        - ZAMBIA_NEW_KWACHA
+        - ZIMBABWE_DOLLAR
+        - ZIMBABWE_GOLD
+        - ZIMBABWE_RTGS
+    CreateTransactionRequest:
+      type: object
+      additionalProperties: false
+      required: [description, transactionDate, amountUsd]
+      properties:
+        description:
+          type: string
+          minLength: 1
+          maxLength: 50
+          pattern: '^[^\u0000]*$'
+          description: Must contain at least one non-whitespace character and must not contain U+0000.
+          example: Business lunch
+        transactionDate:
+          type: string
+          format: date
+          pattern: '^(?!0000)[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+          description: Real calendar date in yyyy-MM-dd format, from 0001-01-01 through 9999-12-31.
+        amountUsd:
+          type: number
+          minimum: 0.005
+          maximum: 99999999999999999.99
+          description: Rounded to cents using HALF_UP before storage; must remain positive after rounding.
+          example: 10.005
+    Transaction:
+      type: object
+      required: [id, description, transactionDate, amountUsd]
+      properties:
+        id:
+          type: string
+          format: uuid
+        description:
+          type: string
+          maxLength: 50
+        transactionDate:
+          type: string
+          format: date
+        amountUsd:
+          type: number
+          description: Original stored USD amount rounded to cents.
+          example: 10.01
+    ConvertedTransaction:
+      allOf:
+        - $ref: '#/components/schemas/Transaction'
+        - type: object
+          required: [currency, exchangeRate, exchangeRateDate, exchangeRateEffectiveDate, convertedAmount]
+          properties:
+            currency:
+              $ref: '#/components/schemas/Currency'
+            exchangeRate:
+              type: number
+              description: Target currency units per USD.
+              example: 1.37
+            exchangeRateDate:
+              type: string
+              format: date
+              description: Treasury record_date.
+            exchangeRateEffectiveDate:
+              type: string
+              format: date
+              description: Treasury effective_date.
+            convertedAmount:
+              type: number
+              description: Converted amount rounded to two decimal places using HALF_UP.
+              example: 13.71
+    Problem:
+      type: object
+      required: [type, title, status, detail, code]
+      properties:
+        type:
+          type: string
+          example: about:blank
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+        code:
+          type: string
+          enum:
+            - VALIDATION_ERROR
+            - INVALID_REQUEST
+            - TRANSACTION_NOT_FOUND
+            - EXCHANGE_RATE_NOT_FOUND
+            - TREASURY_INVALID_RESPONSE
+            - TREASURY_UNAVAILABLE
+            - INTERNAL_ERROR
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field:
+                type: string
+              message:
+                type: string
+  responses:
+    BadRequest:
+      description: Invalid request body, date, amount, UUID, or currency parameter
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotFound:
+      description: Transaction not found
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    InternalError:
+      description: Unexpected server error
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'

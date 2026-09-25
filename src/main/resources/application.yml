@@ -1,0 +1,47 @@
+spring:
+  application:
+    name: transaction-currency-converter
+  profiles:
+    default: local
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  datasource:
+    hikari:
+      maximum-pool-size: 10
+      connection-timeout: 5000
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      # Preserve LocalDate directly through JDBC 4.2, including dates before the Gregorian cutover.
+      hibernate.type.java_time_use_direct_jdbc: true
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,db
+springdoc:
+  api-docs:
+    version: OPENAPI_3_0
+  paths-to-match: /api/v1/**
+  default-produces-media-type: application/json
+  override-with-generic-response: false
+  swagger-ui:
+    disable-swagger-default-url: true
+treasury:
+  base-url: ${TREASURY_BASE_URL:https://api.fiscaldata.treasury.gov/services/api/fiscal_service}
+  connect-timeout: ${TREASURY_CONNECT_TIMEOUT:2s}
+  read-timeout: ${TREASURY_READ_TIMEOUT:5s}

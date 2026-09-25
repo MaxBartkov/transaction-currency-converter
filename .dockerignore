@@ -1,0 +1,7 @@
+*
+!pom.xml
+!src/
+!src/**
+!docs/
+!docs/openapi.yaml
+!Dockerfile
