@@ -1,6 +1,6 @@
 # Transaction Currency Converter
 
-A REST application for the **WEX Corporate Payments Product Brief**. It stores purchase transactions in USD and converts them into a country's currency using historical U.S. Treasury exchange rates.
+A REST application for the **Corporate Payments Product Brief**. It stores purchase transactions in USD and converts them into a country's currency using historical U.S. Treasury exchange rates.
 
 **Stack:** Java 21, Spring Boot 3.5.16, Spring MVC, Bean Validation, Spring Data JPA, PostgreSQL 17, Liquibase, Spring RestClient, Actuator, springdoc-openapi 2.8.17 / Swagger UI, Lombok, Maven, JUnit 5, Mockito, and Testcontainers.
 
