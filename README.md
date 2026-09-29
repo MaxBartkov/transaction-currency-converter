@@ -173,7 +173,7 @@ The suite covers monetary rounding, maximum-amount precision, the supported date
 
 Swagger checks verify the UI, its configuration, JSON/YAML documents, transaction paths, validation constraints, error responses, and currency catalogs against the Java enum.
 
-Coverage of the WEX Corporate Payments Product Brief:
+Coverage of the Corporate Payments Product Brief:
 
 | Requirement | Automated verification |
 |---|---|
